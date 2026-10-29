@@ -52,6 +52,8 @@ decisions.
 
 > Reproduce with `python -m llm_gateway report`. The adversarial suite labels each prompt as an
 > injection attempt and as carrying PII, so detection is scored against ground truth.
+>
+> These numbers come from the deterministic offline provider and are reproduced by the test suite in continuous integration (no network, no credentials). In production the provider is Claude behind the same interface; the injection, redaction, policy, and cache layers apply to its traffic exactly as they do here.
 
 | Defense (14-prompt adversarial suite) | Value |
 |---|---:|
