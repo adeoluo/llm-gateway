@@ -1,0 +1,50 @@
+---
+title: System Architecture - LLM Gateway
+config:
+  theme: base
+  themeVariables:
+    fontFamily: "Inter, system-ui, sans-serif"
+    primaryColor: "#F8FAFC"
+    primaryBorderColor: "#1E293B"
+    primaryTextColor: "#1E293B"
+    lineColor: "#64748B"
+    clusterBkg: "#EEF2FF"
+    clusterBorder: "#94A3B8"
+---
+flowchart TB
+    classDef edge     fill:#F59E0B,stroke:#1E293B,color:#1E293B,stroke-width:1px;
+    classDef core     fill:#6366F1,stroke:#1E293B,color:#ffffff,stroke-width:1px;
+    classDef data     fill:#10B981,stroke:#1E293B,color:#ffffff,stroke-width:1px;
+    classDef control  fill:#0EA5E9,stroke:#1E293B,color:#ffffff,stroke-width:1px;
+    classDef obs      fill:#CBD5E1,stroke:#1E293B,color:#1E293B,stroke-width:1px;
+
+    Client([Client]):::edge
+    Model[["Language model<br/>(Claude in production)"]]:::data
+
+    subgraph Gate["Safety gateway pipeline"]
+        direction TB
+        Inject{"Injection check<br/>block above threshold"}:::control
+        RedactIn["Input PII redaction"]:::core
+        Cache{"Semantic cache<br/>hit by prompt similarity?"}:::control
+        Policy{"Output policy<br/>allowed?"}:::control
+        RedactOut["Output PII redaction"]:::core
+        Store["Store in cache"]:::core
+    end
+
+    Metrics["Stats<br/>cost, cache hit rate, blocks"]:::obs
+
+    subgraph Edge["Service layer (stdlib HTTP)"]
+        direction TB
+        Router["Router<br/>/health | /ready | /metrics | /complete | /inspect | /report | /stats"]:::core
+    end
+
+    Client -->|prompt| Router --> Inject
+    Inject -->|blocked| Metrics
+    Inject -->|ok| RedactIn --> Cache
+    Cache -->|hit| Router
+    Cache -->|miss| Model
+    Model --> Policy
+    Policy -->|blocked| Metrics
+    Policy -->|ok| RedactOut --> Store --> Router
+    Router -->|response| Client
+    Gate -.-> Metrics
