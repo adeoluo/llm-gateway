@@ -67,6 +67,27 @@ benign prompt), redacts **all** PII in the suite, and the semantic cache serves 
 prompts, saving those model calls outright. The one missed injection is a bare delimiter marker
 below the block threshold, which the threshold can be tuned to catch.
 
+### Scale
+
+To check that the pipeline holds up under volume, `benchmarks/scale.py` pushes growing
+synthetic request streams (sampled with repetition from the labeled suite) through a single
+`Gateway.handle`, measuring throughput and peak memory (via the standard-library
+`tracemalloc`) alongside the same defense metrics. The data is synthetic and the numbers
+are environment-specific; because the semantic cache is bounded by the number of distinct
+prompts, memory stays flat while throughput and detection quality are size-independent.
+
+| Requests | Wall-clock (s) | Throughput (req/s) | Peak memory (MiB) | Inj. precision | Inj. recall | PII recall | Cache hit rate |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 10,000 | 1.38 | ~7,250 | 0.01 | 1.000 | 0.854 | 1.000 | 0.570 |
+| 25,000 | 3.82 | ~6,540 | 0.01 | 1.000 | 0.854 | 1.000 | 0.572 |
+| 50,000 | 8.55 | ~5,845 | 0.01 | 1.000 | 0.855 | 1.000 | 0.572 |
+| 100,000 | 16.73 | ~5,977 | 0.01 | 1.000 | 0.856 | 1.000 | 0.569 |
+
+Injection precision stays 1.000, recall holds near 0.855, PII recall stays 1.000, and the
+cache serves ~57% of this stream. These quality numbers come from the deterministic offline
+provider; production uses a real language-model API behind the same interface. Reproduce
+with `uv run python benchmarks/scale.py`.
+
 ## Demonstration
 
 ```text
