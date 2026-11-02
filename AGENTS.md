@@ -12,6 +12,7 @@ A safety proxy that sits in front of a language-model API: prompt-injection defe
 - `benchmarks/`: benchmark scripts and recorded results
 - `docker-compose.yml`: local container setup
 - `docs/`: documentation, architecture diagram source and render, design records
+- `scripts/`: maintenance scripts (release, assets, data)
 - `src/`: library and service source
 - `tests/`: test suite
 
@@ -50,6 +51,8 @@ Key modules:
 | `make docker-up` | Run via docker compose |
 | `make clean` | Remove caches and artifacts |
 | `make all` | Full local gate (mirror of continuous integration) |
+| `make go-test` | Go proxy: gofmt check, vet, race tests |
+| `make go-parity` | Regenerate the Go parity fixtures from the Python rules |
 | `make changelog` | Regenerate CHANGELOG.md from Conventional Commits (git-cliff) |
 | `make cut-release` | Cut a release locally: version bump, changelog, tag, GitHub release (RELEASE_VERSION=vX.Y.Z optional) |
 
