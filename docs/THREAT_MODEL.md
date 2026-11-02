@@ -32,7 +32,7 @@
 
 ## Supply chain
 - No third-party runtime packages; the production provider uses the standard-library HTTP
-  client. Development tooling is pinned via `uv.lock`. CodeQL and dependency scanning run in CI.
+  client. Development tooling is pinned via `uv.lock`. CodeQL runs in CI.
 
 ## Residual risk
 - Rule-based detection cannot catch every attack, and the cache could serve a stale response if the
