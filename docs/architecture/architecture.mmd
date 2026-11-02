@@ -5,59 +5,44 @@ flowchart LR
     classDef control  fill:#0EA5E9,stroke:#1E293B,color:#ffffff,stroke-width:1px;
     classDef obs      fill:#CBD5E1,stroke:#1E293B,color:#1E293B,stroke-width:1px;
 
-    User([CLI user]):::edge
-    Client([HTTP client]):::edge
-    Claude([Anthropic Messages API<br/>optional AnthropicProvider]):::edge
-
-    subgraph Interfaces["Interfaces (CLI and stdlib HTTP)"]
+    subgraph Interfaces["Interfaces"]
         direction TB
-        CLI["cli.py<br/>report | complete | inspect | serve"]:::edge
-        Router["service.py router<br/>/complete /inspect /report /stats /metrics"]:::core
-        Validate["Request validation<br/>prompt, max 20000 characters"]:::control
+        Users([Users and clients]):::edge
+        CLI["CLI<br/>complete, inspect"]:::edge
+        Router["HTTP service<br/>/complete /stats"]:::core
+        Validate["Validation<br/>prompt, max 20000"]:::control
+        Users --> CLI ~~~ Router --> Validate
     end
 
-    subgraph Core["Safety pipeline (Gateway.handle)"]
+    subgraph Core["Safety pipeline"]
         direction TB
-        Gateway["Gateway.handle<br/>fixed stage order"]:::core
-        Inject{"Injection check<br/>block at score 0.8"}:::control
+        Inject["Injection check<br/>block at score 0.8"]:::control
         RedactIn["Input PII redaction<br/>typed placeholders"]:::control
-        Provider["Provider<br/>offline default, retry and failover wrapper"]:::core
-        Policy{"Output policy<br/>deny list, length cap"}:::control
+        Provider["Provider<br/>optional retry, failover"]:::core
+        Claude([Anthropic API<br/>optional provider]):::edge
+        Policy["Output policy<br/>deny list, length cap"]:::control
         RedactOut["Output PII redaction"]:::control
+        Inject -->|allowed| RedactIn --> Provider --> Policy -->|allowed| RedactOut ~~~ Claude
+        Provider -.-> Claude
     end
 
-    subgraph State["Data and state (in memory)"]
+    subgraph State["Data and state"]
         direction TB
         Cache[("Semantic cache<br/>token-similar prompts")]:::data
-        Suite[("Adversarial suite<br/>labeled attack and PII cases")]:::data
+        Suite[("Adversarial suite<br/>labeled cases")]:::data
+        Cache ~~~ Suite
     end
 
     subgraph Obs["Evaluation and observability"]
         direction TB
-        Response["Response JSON<br/>status, reasons, redaction counts"]:::obs
-        Stats["GatewayStats<br/>cache hits, blocks, model calls"]:::obs
-        Report["evaluation.py<br/>injection P and R, PII recall, savings"]:::obs
-        Metrics["ServiceMetrics<br/>Prometheus text"]:::obs
+        Response["Response JSON<br/>status and reasons"]:::obs
+        Stats["Gateway stats<br/>hits, blocks, calls"]:::obs
+        Report["Defense report<br/>injection, PII, savings"]:::obs
+        Metrics["Metrics<br/>Prometheus text"]:::obs
+        Response ~~~ Stats ~~~ Report ~~~ Metrics
     end
 
-    User -->|arguments| CLI
-    Client -->|JSON request| Router
-    Router -->|POST /complete| Validate
-    Validate -->|prompt| Gateway
-    CLI -->|prompt| Gateway
-    Gateway --> Inject
-    Inject -->|blocked| Response
-    Inject -->|allowed| RedactIn
-    RedactIn -->|safe prompt| Cache
-    Cache -->|hit| Response
-    Cache -->|miss| Provider
-    Provider -->|when passed in| Claude
-    Provider -->|raw output| Policy
-    Policy -->|blocked| Response
-    Policy -->|allowed| RedactOut
-    RedactOut -->|store| Cache
-    RedactOut -->|text| Response
-    Gateway -.->|counters| Stats
-    Suite -.->|labeled cases| Report
-    Response -->|suite outcomes| Report
-    Router -.->|route latency and errors| Metrics
+    Interfaces -->|prompt| Core
+    Core -->|cache| State
+    Core -->|result| Obs
+    State -.->|cases| Obs
