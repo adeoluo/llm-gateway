@@ -1,4 +1,4 @@
-.PHONY: help setup lint format type test coverage evaluation run diagram docker-build docker-up clean all changelog cut-release
+.PHONY: go-test go-parity help setup lint format type test coverage evaluation run diagram docker-build docker-up clean all changelog cut-release
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -47,6 +47,12 @@ clean: ## Remove caches and artifacts
 	find . -type d -name __pycache__ -exec rm -rf {} +
 
 all: lint type coverage ## Full local gate (mirror of continuous integration)
+
+go-test: ## Go proxy: gofmt check, vet, race tests
+	cd go && test -z "$$(gofmt -l .)" && go vet ./... && go test -race -count=1 ./...
+
+go-parity: ## Regenerate the Go parity fixtures from the Python rules
+	uv run python go/gateway/testdata/generate.py
 
 changelog: ## Regenerate CHANGELOG.md from Conventional Commits (git-cliff)
 	git cliff --output CHANGELOG.md && perl -0pi -e 's/\n+\z/\n/' CHANGELOG.md
