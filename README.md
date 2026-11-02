@@ -111,7 +111,7 @@ of times then succeeds, and a `FailingProvider` that is always down). Reproduce 
   its quota returns `rate_limited` to that tenant only; others are unaffected.
 - **Per-tenant cache isolation.** Each tenant has its own semantic cache. Four tenants replaying
   the same 1,000-request stream each reach a **0.995 cache hit rate** independently (5 model calls
-  per tenant), and a tenant never reads another's cached response — proven with a counting
+  per tenant), and a tenant never reads another's cached response, proven with a counting
   provider whose answer changes per call.
 
 | Reliability property | Measured result |
