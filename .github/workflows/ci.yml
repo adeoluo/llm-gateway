@@ -54,6 +54,23 @@ jobs:
           name: coverage
           path: coverage.xml
 
+  go:
+    name: Go proxy (vet, race tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: go
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go/go.mod
+      - name: Format
+        run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test -race -count=1 -cover ./...
+      - run: go build -o /dev/null ./cmd/gateway-proxy
+
   build:
     name: build (package + image)
     runs-on: ubuntu-latest
