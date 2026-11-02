@@ -47,6 +47,12 @@ decisions.
   social security numbers, credit cards, and IP addresses, on both input and output.
 - **Output-policy enforcement** - a configurable deny list and a length cap on model responses.
 - **A semantic cache** - returns a stored response for a token-similar prompt, saving model calls.
+- **Retry + failover** - the model backend is wrapped by a `ResilientProvider` that retries
+  transient failures with exponential backoff and fails over across an ordered list of providers,
+  so a primary outage is served by a healthy fallback.
+- **Per-tenant isolation** - a `MultiTenantGateway` gives every tenant its own semantic cache,
+  token-bucket quota, and metrics, so one tenant can neither read another's cache nor exhaust its
+  quota. The handler is lock-guarded and thread-safe.
 
 ## Results
 
@@ -88,6 +94,37 @@ cache serves ~57% of this stream. These quality numbers come from the determinis
 provider; production uses a real language-model API behind the same interface. Reproduce
 with `uv run python benchmarks/scale.py`.
 
+## Reliability and multi-tenancy
+
+The gateway wraps the model backend in reliability machinery and keeps tenants isolated, all
+proven offline with deterministic fake providers (a `FlakyProvider` that fails a fixed number
+of times then succeeds, and a `FailingProvider` that is always down). Reproduce with
+`uv run python benchmarks/reliability.py`.
+
+- **Retry with backoff.** A `ResilientProvider` retries transient `ProviderError`s up to
+  `max_attempts` times with exponential backoff before giving up. Over 2,000 requests whose
+  primary fails twice each, it recovers **100%** (2,000/2,000) with 4,000 retries applied.
+- **Failover.** When a provider is exhausted, the request fails over to the next provider in an
+  ordered list. With a *dead* primary and a healthy fallback, 2,000/2,000 requests still succeed
+  (**100% recovery**, 2,000 failovers).
+- **Per-tenant quota isolation.** Each tenant has its own token bucket, so one tenant draining
+  its quota returns `rate_limited` to that tenant only; others are unaffected.
+- **Per-tenant cache isolation.** Each tenant has its own semantic cache. Four tenants replaying
+  the same 1,000-request stream each reach a **0.995 cache hit rate** independently (5 model calls
+  per tenant), and a tenant never reads another's cached response — proven with a counting
+  provider whose answer changes per call.
+
+| Reliability property | Measured result |
+|---|---:|
+| recovery rate, primary fails 2× per request (2,000 reqs) | 1.000 |
+| recovery rate, dead primary → fallback (2,000 reqs) | 1.000 |
+| per-tenant cache hit rate (4 tenants × 1,000 reqs) | 0.995 |
+| concurrent requests with consistent counters (3 tenants × 200 threaded reqs) | lossless |
+
+A concurrency test drives the `MultiTenantGateway` from three tenant threads (200 requests each)
+and asserts every request is counted exactly once and each tenant's cache is built independently,
+confirming the counters and caches are thread-safe under contention.
+
 ## Demonstration
 
 ```text
@@ -116,6 +153,29 @@ if result.status == "ok":
 
 The `AnthropicProvider` calls the Claude Messages API over HTTPS using only the standard library, so
 production has no third-party runtime dependency. It is never exercised by the test suite.
+
+### Reliability and per-tenant isolation in code
+
+```python
+from llm_gateway import (
+    AnthropicProvider,
+    MultiTenantGateway,
+    ResilientProvider,
+)
+
+# Retry transient failures and fail over from a primary to a backup provider.
+backend = ResilientProvider(
+    [AnthropicProvider(), AnthropicProvider(model="claude-3-5-haiku-latest")]
+)
+
+# Each tenant gets its own cache, quota, and metrics.
+gateway = MultiTenantGateway(provider=backend, rate_capacity=100, refill_per_second=100)
+outcome = gateway.handle(tenant="acme", prompt=user_prompt)
+if outcome.status == "ok":
+    send(outcome.response.text)
+elif outcome.status == "rate_limited":
+    reject(429)
+```
 
 ## Quickstart
 
@@ -177,7 +237,8 @@ Full method and tables: [`docs/EVALUATION_REPORT.md`](docs/EVALUATION_REPORT.md)
 ## Roadmap
 
 - [ ] Add an embedding-based semantic cache for paraphrase matching.
-- [ ] Add per-tenant rate limiting and budget caps.
+- [x] Add per-tenant rate limiting and budget caps.
+- [x] Add retry with backoff and cross-provider failover for the model backend.
 - [ ] Add a canary-token check for system-prompt leakage in responses.
 
 ## License
