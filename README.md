@@ -147,6 +147,12 @@ python -m llm_gateway serve                   # start the HTTP service on :8000
 
 ## Usage
 
+A real run: an injection attempt flagged and its email address redacted, a benign prompt passed, then the defense report. Regenerate with `vhs docs/demo/gateway.tape`.
+
+<p align="center">
+  <img src="docs/demo/gateway.gif" alt="llm-gateway flagging an injection attempt and redacting PII" width="860">
+</p>
+
 ### Command line
 
 ```text
