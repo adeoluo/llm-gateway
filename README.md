@@ -255,6 +255,12 @@ The full safety pipeline on a request, end to end.
   <img src="docs/demo/complete.gif" alt="The full safety pipeline on a request, end to end" width="860">
 </p>
 
+The HTTP service inspecting a prompt, then the running counters.
+
+<p align="center">
+  <img src="docs/demo/http.gif" alt="The HTTP service inspecting a prompt, then the running counters" width="860">
+</p>
+
 ## Design decisions
 
 - **A single pipeline in front of the model**: centralizing injection, redaction, policy, and
