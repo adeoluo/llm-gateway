@@ -6,9 +6,9 @@ into a text completion. Two implementations are shipped:
 * :class:`FakeProvider` is deterministic, offline, and rule-based. It is what the
   tests, benchmarks, and continuous integration use, so the pipeline is fully
   reproducible without network access or credentials.
-* :class:`AnthropicProvider` calls the real Claude Messages API over HTTPS using
-  only the standard library, so production has no third-party dependency. It reads
-  its key from the environment and is never exercised by the test suite.
+* :class:`AnthropicProvider` calls the real Claude Messages API over HTTPS with
+  the standard-library HTTP client. It reads its key from the environment and is
+  never exercised by the test suite.
 
 Keeping the two behind one protocol means the gateway's safety logic is identical
 in tests and in production; only the model backend changes.
@@ -49,7 +49,7 @@ class FakeProvider:
 
 
 class AnthropicProvider:  # pragma: no cover - requires network and credentials
-    """Calls the Claude Messages API over HTTPS using only the standard library."""
+    """Calls the Claude Messages API over HTTPS with the standard-library HTTP client."""
 
     def __init__(
         self,

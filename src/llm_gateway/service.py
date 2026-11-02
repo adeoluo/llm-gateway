@@ -1,4 +1,4 @@
-"""A dependency-free HTTP service exposing the safety gateway.
+"""A standard-library HTTP service exposing the safety gateway.
 
 The service wraps a gateway over the offline provider by default, so it runs with
 no credentials; a real provider can be injected in production. The routing logic

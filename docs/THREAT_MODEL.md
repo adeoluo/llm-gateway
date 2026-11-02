@@ -31,7 +31,7 @@
   never from the request, and never logs it. CI uses only the offline provider.
 
 ## Supply chain
-- Zero third-party runtime dependencies; the production provider uses the standard-library HTTP
+- No third-party runtime packages; the production provider uses the standard-library HTTP
   client. Development tooling is pinned via `uv.lock`. CodeQL and dependency scanning run in CI.
 
 ## Residual risk
