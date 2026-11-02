@@ -32,10 +32,14 @@ production.
   <img src="docs/architecture/architecture.svg" alt="Architecture diagram" width="860">
 </p>
 
-Every request flows through fixed stages: injection check, input PII redaction, semantic cache
-lookup, model call on a miss, output-policy check, output PII redaction, and cache store. The
-gateway records cost and cache hits so savings are measurable. See the [ADRs](docs/adr/) for the key
-decisions.
+<sub>Legend: amber = entry points and external systems, indigo = core logic, green = data and state, blue = validation and control, grey = observability and outputs.</sub>
+
+Every request, from the CLI or a validated `/complete` call, flows through fixed stages:
+injection check, input PII redaction, semantic cache lookup, model call on a miss, output-policy
+check, output PII redaction, and cache store. A blocked stage returns early with its reasons. The
+gateway records cost, blocks, and cache hits so savings are measurable, the report scores the
+defenses on a labeled adversarial suite, and every route records latency and errors for
+`/metrics`. See the [ADRs](docs/adr/) for the key decisions.
 
 ### Components
 
