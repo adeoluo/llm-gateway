@@ -1,0 +1,38 @@
+# LLM Gateway
+
+> A safety proxy that sits in front of a language-model API: prompt-injection defense, PII redaction, output-policy enforcement, and a semantic response cache. It ships with an adversarial test suite, so its defenses are measured.
+
+Languages: Python. License: MIT. Source: https://github.com/adeoluo/llm-gateway
+
+## Docs
+
+- [README](https://github.com/adeoluo/llm-gateway/blob/main/README.md): motivation, architecture, results, quickstart, usage, design decisions, testing, responsible ai, limitations, roadmap
+- [AGENTS.md](https://github.com/adeoluo/llm-gateway/blob/main/AGENTS.md): layout, commands and conventions for changing the code
+- [Architecture diagram](https://github.com/adeoluo/llm-gateway/blob/main/docs/architecture/architecture.mmd): Mermaid source of the component diagram
+- [Data Card - LLM Gateway](https://github.com/adeoluo/llm-gateway/blob/main/docs/DATA_CARD.md)
+- [Definition of Done](https://github.com/adeoluo/llm-gateway/blob/main/docs/DEFINITION_OF_DONE.md)
+- [Evaluation Report - LLM Gateway](https://github.com/adeoluo/llm-gateway/blob/main/docs/EVALUATION_REPORT.md)
+- [Model / System Card - LLM Gateway](https://github.com/adeoluo/llm-gateway/blob/main/docs/MODEL_CARD.md)
+- [Threat Model - LLM Gateway](https://github.com/adeoluo/llm-gateway/blob/main/docs/THREAT_MODEL.md)
+- [ADR-0001: Record architecture decisions](https://github.com/adeoluo/llm-gateway/blob/main/docs/adr/0001-record-architecture-decisions.md)
+- [ADR-0002: A single safety pipeline in front of the model](https://github.com/adeoluo/llm-gateway/blob/main/docs/adr/0002-gateway-pipeline.md)
+- [ADR-0003: Layered, weighted injection detection](https://github.com/adeoluo/llm-gateway/blob/main/docs/adr/0003-layered-injection.md)
+- [ADR-NNNN: <short title>](https://github.com/adeoluo/llm-gateway/blob/main/docs/adr/template.md)
+- [Changelog](https://github.com/adeoluo/llm-gateway/blob/main/CHANGELOG.md): release history
+
+## Source
+
+- [src/llm_gateway/__init__.py](https://github.com/adeoluo/llm-gateway/blob/main/src/llm_gateway/__init__.py): LLM Gateway - a safety proxy for language-model APIs, from scratch.
+- [src/llm_gateway/cli.py](https://github.com/adeoluo/llm-gateway/blob/main/src/llm_gateway/cli.py): Command line interface for the language-model safety gateway.
+- [src/llm_gateway/data.py](https://github.com/adeoluo/llm-gateway/blob/main/src/llm_gateway/data.py): A labeled adversarial suite: injection attempts, PII prompts, and benign inputs.
+- [src/llm_gateway/evaluation.py](https://github.com/adeoluo/llm-gateway/blob/main/src/llm_gateway/evaluation.py): Evaluation: injection-detection quality, PII-redaction recall, cache savings.
+- [src/llm_gateway/gateway.py](https://github.com/adeoluo/llm-gateway/blob/main/src/llm_gateway/gateway.py): The gateway pipeline: defend input, cache, call the model, enforce output policy.
+- [src/llm_gateway/injection.py](https://github.com/adeoluo/llm-gateway/blob/main/src/llm_gateway/injection.py): Prompt-injection detection over user input.
+- [src/llm_gateway/observability.py](https://github.com/adeoluo/llm-gateway/blob/main/src/llm_gateway/observability.py): In-process request metrics for the HTTP service (Prometheus text exposition).
+- [src/llm_gateway/pii.py](https://github.com/adeoluo/llm-gateway/blob/main/src/llm_gateway/pii.py): Detection and redaction of personally identifiable information.
+- [src/llm_gateway/policy.py](https://github.com/adeoluo/llm-gateway/blob/main/src/llm_gateway/policy.py): Output policy enforcement and a semantic response cache.
+- [src/llm_gateway/provider.py](https://github.com/adeoluo/llm-gateway/blob/main/src/llm_gateway/provider.py): The language-model provider interface, a deterministic fake, and a real client.
+- [src/llm_gateway/rate_limit.py](https://github.com/adeoluo/llm-gateway/blob/main/src/llm_gateway/rate_limit.py): Per-tenant rate limiting via a token bucket.
+- [src/llm_gateway/resilience.py](https://github.com/adeoluo/llm-gateway/blob/main/src/llm_gateway/resilience.py): Retry-with-backoff and cross-provider failover for the model backend.
+- [src/llm_gateway/service.py](https://github.com/adeoluo/llm-gateway/blob/main/src/llm_gateway/service.py): A standard-library HTTP service exposing the safety gateway.
+- [src/llm_gateway/tenancy.py](https://github.com/adeoluo/llm-gateway/blob/main/src/llm_gateway/tenancy.py): Per-tenant isolation on top of the single-tenant :class:`Gateway`.
