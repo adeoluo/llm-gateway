@@ -19,7 +19,7 @@ from llm_gateway.resilience import (
 )
 from llm_gateway.tenancy import MultiTenantGateway, TenantMetrics, TenantResponse
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 __all__ = [
     "AnthropicProvider",
