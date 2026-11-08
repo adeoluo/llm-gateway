@@ -20,3 +20,5 @@ keywords:
   - "prompt-injection"
   - "python"
   - "security"
+  - "mitre-atlas"
+  - "owasp-llm-top-10"
