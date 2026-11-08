@@ -1,10 +1,22 @@
 cff-version: 1.2.0
-message: "If you use this work, please cite it."
-title: "Llm Gateway"
+message: "If you use this software, please cite it as below."
+type: software
+title: "LLM Gateway"
+abstract: "A safety gateway for language-model APIs: prompt-injection defense, PII redaction, output-policy enforcement, and a semantic cache, plus a Go reverse proxy with the same rules, measured on an adversarial suite."
 authors:
   - family-names: "Ogunnoiki"
     given-names: "Adeolu"
-version: 0.1.0
-date-released: 2026-01-01
+version: "0.2.0"
+date-released: "2026-11-02"
 license: MIT
+repository-code: "https://github.com/adeoluo/llm-gateway"
 url: "https://github.com/adeoluo/llm-gateway"
+keywords:
+  - "ai-safety"
+  - "anthropic"
+  - "gateway"
+  - "llm"
+  - "pii-redaction"
+  - "prompt-injection"
+  - "python"
+  - "security"
