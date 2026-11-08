@@ -293,6 +293,11 @@ All tests use offline providers; the Anthropic provider is never called. CI runs
 - **Model card:** [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md)
 - **Data card:** [`docs/DATA_CARD.md`](docs/DATA_CARD.md)
 - **Threat model:** [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md)
+- **Standards:** the [threat model](docs/THREAT_MODEL.md#standards-mapping) maps each control
+  to the OWASP Top 10 for LLM Applications 2026 (LLM01:2026 Prompt Injection, LLM02:2026
+  Sensitive Information Disclosure, LLM06:2026 Unbounded Consumption, LLM08:2026 Hidden
+  Context Exposure, LLM10:2026 Improper Output Handling) and to MITRE ATLAS v2026.10 (for
+  example AML.T0051.000 LLM Prompt Injection: Direct and AML.T0054 LLM Jailbreak).
 
 ## Limitations
 
