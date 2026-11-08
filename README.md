@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/adeoluo/llm-gateway/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/adeoluo/llm-gateway/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/adeoluo/llm-gateway/releases"><img alt="Release" src="https://img.shields.io/github/v/release/adeoluo/llm-gateway"></a>
-  <img alt="Python" src="https://img.shields.io/badge/python-3.11%20%7C%203.12-blue">
+  <img alt="Python" src="https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14%20%7C%203.15-blue">
   <img alt="Go" src="https://img.shields.io/badge/go-proxy-00ADD8">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green"></a>
 </p>
@@ -285,7 +285,7 @@ make lint type   # ruff format check, ruff lint, mypy
   metrics (`go test -race`, 95% statement coverage).
 - `tests/test_service_cli.py`: the HTTP handler layer (health, readiness, `/complete`, `/inspect`, `/report`, `/stats`, validation, metrics, unknown routes) and the command-line interface.
 
-All tests use offline providers; the Anthropic provider is never called. CI runs ruff format, ruff lint, mypy, and pytest with the coverage gate on Python 3.11 and 3.12, then builds the package and the Docker image. A Go job runs `gofmt`, `go vet`, and
+All tests use offline providers; the Anthropic provider is never called. CI runs ruff format, ruff lint, mypy, and pytest with the coverage gate on Python 3.12, 3.13, 3.14 and 3.15, then builds the package and the Docker image. A Go job runs `gofmt`, `go vet`, and
 `go test -race`.
 
 ## Responsible AI
