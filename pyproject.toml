@@ -1,6 +1,6 @@
 [project]
 name = "llm-gateway"
-version = "0.2.0"
+version = "0.2.1"
 description = "A safety gateway for language-model APIs with prompt-injection defense, PII redaction, policy enforcement, and semantic caching"
 readme = "README.md"
 requires-python = ">=3.12"
