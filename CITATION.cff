@@ -6,8 +6,8 @@ abstract: "A safety gateway for language-model APIs: prompt-injection defense, P
 authors:
   - family-names: "Ogunnoiki"
     given-names: "Adeolu"
-version: "0.2.2"
-date-released: "2026-11-08"
+version: "0.2.3"
+date-released: "2026-11-09"
 license: MIT
 repository-code: "https://github.com/adeoluo/llm-gateway"
 url: "https://github.com/adeoluo/llm-gateway"
