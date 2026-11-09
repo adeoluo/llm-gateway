@@ -113,3 +113,48 @@ def test_fake_provider_echo_and_default() -> None:
     provider = FakeProvider()
     assert provider.complete("sys", "ECHO: hello world") == "hello world"
     assert provider.complete("sys", "a question").startswith("A concise, safe answer")
+
+
+def test_anthropic_provider_request_shape(monkeypatch) -> None:
+    import io
+    import json
+    import urllib.request
+
+    from llm_gateway.provider import AnthropicProvider
+
+    captured = {}
+
+    class Reply(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        captured["headers"] = {k.lower(): v for k, v in request.header_items()}
+        captured["body"] = json.loads(request.data)
+        blocks = [{"type": "thinking", "thinking": ""}, {"type": "text", "text": "hello"}]
+        return Reply(json.dumps({"content": blocks}).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    provider = AnthropicProvider(api_key="ak-test")
+    assert provider.complete("sys", "hi") == "hello"
+    assert captured["url"] == "https://api.anthropic.com/v1/messages"
+    assert captured["headers"]["anthropic-version"] == "2026-10-21"
+    body = captured["body"]
+    assert body["model"] == "claude-sonnet-5-5"
+    assert body["max_tokens"] == 2048
+    assert body["system"] == "sys"
+    assert not {"temperature", "top_p", "top_k"} & body.keys()
+
+
+def test_anthropic_provider_needs_a_key(monkeypatch) -> None:
+    import pytest
+
+    from llm_gateway.provider import AnthropicProvider
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
+        AnthropicProvider()
