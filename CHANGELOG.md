@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The file is generated
 from Conventional Commits by [git-cliff](https://git-cliff.org) when a release is cut
 with `make cut-release`.
 
+## [0.2.3] 2026-11-09
+
+### Bug fixes
+
+- Current Claude model and Messages API version for the Anthropic provider, with a request shape test (#12)
+
+### Documentation
+
+- Diagrams on white in the shared theme, make diagram for every diagram, and a self-contained Definition of Done (#11)
+
+### Build and CI
+
+- Build and attach the sdist and wheel to every release (#13)
+
 ## [0.2.2] 2026-11-08
 
 ### Documentation
