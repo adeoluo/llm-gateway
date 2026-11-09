@@ -48,16 +48,16 @@ class FakeProvider:
         return f"A concise, safe answer to: {normalized[:80]}"
 
 
-class AnthropicProvider:  # pragma: no cover - requires network and credentials
+class AnthropicProvider:
     """Calls the Claude Messages API over HTTPS with the standard-library HTTP client."""
 
     def __init__(
         self,
         *,
-        model: str = "claude-3-5-sonnet-latest",
+        model: str = "claude-sonnet-5-5",
         api_key: str | None = None,
         timeout: float = 30.0,
-        max_tokens: int = 1024,
+        max_tokens: int = 2048,
     ) -> None:
         self.model = model
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
@@ -81,7 +81,8 @@ class AnthropicProvider:  # pragma: no cover - requires network and credentials
             headers={
                 "content-type": "application/json",
                 "x-api-key": self.api_key,
-                "anthropic-version": "2023-06-01",
+                # 2026-10-21 rejects sampling parameters; the body sends none.
+                "anthropic-version": "2026-10-21",
             },
             method="POST",
         )
