@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from llm_gateway.injection import assess_injection
+from llm_gateway.injection import InjectionScorer, assess_injection
 from llm_gateway.pii import redact
 from llm_gateway.policy import SemanticCache, check_output
 from llm_gateway.provider import FakeProvider, Provider
@@ -62,6 +62,7 @@ class Gateway:
     provider: Provider = field(default_factory=FakeProvider)
     system: str = "You are a helpful, harmless assistant."
     injection_threshold: float = 0.8
+    injection_classifier: InjectionScorer | None = None
     cache: SemanticCache = field(default_factory=SemanticCache)
     stats: GatewayStats = field(default_factory=GatewayStats)
 
@@ -70,7 +71,11 @@ class Gateway:
 
         self.stats.requests += 1
 
-        injection = assess_injection(prompt, threshold=self.injection_threshold)
+        injection = assess_injection(
+            prompt,
+            threshold=self.injection_threshold,
+            classifier=self.injection_classifier,
+        )
         if injection.blocked:
             self.stats.blocked_injection += 1
             return GatewayResponse(

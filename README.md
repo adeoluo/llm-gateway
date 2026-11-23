@@ -44,10 +44,13 @@ defenses on a labeled adversarial suite, and every route records latency and err
 
 ### Components
 
-- **Prompt-injection detection**: weighted high-signal rules (instruction override, role
-  reassignment, prompt extraction, jailbreak markers) with a tunable block threshold.
-- **PII redaction**: regex detection and typed-placeholder replacement for emails, phone numbers,
-  social security numbers, credit cards, and IP addresses, on both input and output.
+- **Prompt-injection detection**: zero-dependency weighted pattern rules by default (shared
+  identically with the Go RE2 reverse proxy), plus an optional pluggable `injection_classifier`
+  hook on `Gateway` for attaching a trained ML scorer such as
+  [`prompt-injection-detector`](https://github.com/adeoluo/prompt-injection-detector).
+- **PII redaction**: lightweight regex detection and typed-placeholder replacement for emails,
+  phone numbers, social security numbers, credit cards, and IP addresses (shared with the Go
+  proxy).
 - **Output-policy enforcement**: a configurable deny list and a length cap on model responses.
 - **A semantic cache**: returns a stored response for a token-similar prompt, saving model calls.
 - **Retry + failover**: the model backend is wrapped by a `ResilientProvider` that retries

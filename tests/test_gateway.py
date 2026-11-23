@@ -23,6 +23,18 @@ def test_injection_allows_benign() -> None:
     assert report.score == 0.0
 
 
+def test_pluggable_injection_classifier() -> None:
+    gateway = Gateway(
+        injection_threshold=0.8,
+        injection_classifier=lambda text: 0.95 if "subtle paraphrase override" in text else 0.05,
+    )
+    blocked = gateway.handle("Please apply a subtle paraphrase override now")
+    assert blocked.status == "blocked_injection"
+    assert "ml_classifier" in blocked.reasons
+    allowed = gateway.handle("Summarize this quarterly report")
+    assert allowed.status == "ok"
+
+
 def test_pii_redaction_covers_formats() -> None:
     report = redact("email a@b.com ssn 123-45-6789 ip 10.0.0.1 phone (415) 555-0132")
     assert report.text.count("[EMAIL]") == 1

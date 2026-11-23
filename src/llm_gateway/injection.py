@@ -11,7 +11,10 @@ score; a request is blocked when the score crosses a threshold.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
+
+InjectionScorer = Callable[[str], float]
 
 _PATTERNS: tuple[tuple[re.Pattern[str], float, str], ...] = (
     (
@@ -57,8 +60,18 @@ class InjectionReport:
     triggers: tuple[str, ...]
 
 
-def assess_injection(text: str, *, threshold: float = 0.8) -> InjectionReport:
-    """Return the injection risk of ``text`` against ``threshold``."""
+def assess_injection(
+    text: str,
+    *,
+    threshold: float = 0.8,
+    classifier: InjectionScorer | None = None,
+) -> InjectionReport:
+    """Return the injection risk of ``text`` against ``threshold``.
+
+    When ``classifier`` is provided (for example ``prompt_injection_detector.score``),
+    its probability score is fused with the rule score (`max(rule_score, ml_score)`),
+    adding ``"ml_classifier"`` to ``triggers`` when the model crosses ``threshold``.
+    """
 
     score = 0.0
     triggers: list[str] = []
@@ -66,6 +79,11 @@ def assess_injection(text: str, *, threshold: float = 0.8) -> InjectionReport:
         if pattern.search(text):
             score += weight
             triggers.append(name)
+    if classifier is not None:
+        ml_score = float(classifier(text))
+        if ml_score >= threshold:
+            triggers.append("ml_classifier")
+        score = max(score, ml_score)
     return InjectionReport(
         score=round(score, 3), blocked=score >= threshold, triggers=tuple(triggers)
     )
