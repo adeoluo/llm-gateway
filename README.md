@@ -16,6 +16,23 @@
 
 > **Evidence level: unit tested.** The Python and Go implementations agree on a parity fixture, and reliability is tested with deterministic fake providers. The screening rules are a heuristic, not a measured defense. Not independently reproduced and not used in production. [What the levels mean](https://github.com/adeoluo#evidence-levels).
 
+## In plain English
+
+A gateway sits between your app and the companies that provide AI models. It keeps your app
+working when a provider fails, stops one customer from using up everyone's share, and reuses
+earlier answers.
+
+- **It recovers from failures.** 2,000 of 2,000 requests succeeded when the main provider
+  failed twice on each one, and 2,000 of 2,000 when the main provider was down and a backup
+  took over.
+- **It is built twice, and both builds agree.** A Python version and a Go version give the
+  same results on a shared test file.
+
+**Where it falls short:** the providers in those tests are fakes that fail on purpose. The
+attack screening is a short list of patterns, and a reworded attack gets past it, so it is
+not a security defense by itself. For measured detection see
+[prompt-injection-detector](https://github.com/adeoluo/prompt-injection-detector).
+
 ## Motivation
 
 Putting a language model in production means putting a boundary in front of it. Untrusted input can
