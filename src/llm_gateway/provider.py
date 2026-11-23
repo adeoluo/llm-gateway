@@ -54,7 +54,7 @@ class AnthropicProvider:
     def __init__(
         self,
         *,
-        model: str = "claude-sonnet-5-5",
+        model: str = "claude-sonnet-4-20250514",
         api_key: str | None = None,
         timeout: float = 30.0,
         max_tokens: int = 2048,
@@ -81,8 +81,8 @@ class AnthropicProvider:
             headers={
                 "content-type": "application/json",
                 "x-api-key": self.api_key,
-                # 2026-10-21 rejects sampling parameters; the body sends none.
-                "anthropic-version": "2026-10-21",
+                # 2023-06-01 rejects sampling parameters; the body sends none.
+                "anthropic-version": "2023-06-01",
             },
             method="POST",
         )

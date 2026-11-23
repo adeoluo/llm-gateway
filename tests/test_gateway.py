@@ -154,9 +154,9 @@ def test_anthropic_provider_request_shape(monkeypatch) -> None:
     provider = AnthropicProvider(api_key="ak-test")
     assert provider.complete("sys", "hi") == "hello"
     assert captured["url"] == "https://api.anthropic.com/v1/messages"
-    assert captured["headers"]["anthropic-version"] == "2026-10-21"
+    assert captured["headers"]["anthropic-version"] == "2023-06-01"
     body = captured["body"]
-    assert body["model"] == "claude-sonnet-5-5"
+    assert body["model"] == "claude-sonnet-4-20250514"
     assert body["max_tokens"] == 2048
     assert body["system"] == "sys"
     assert not {"temperature", "top_p", "top_k"} & body.keys()
