@@ -1,3 +1,3 @@
 module github.com/adeoluo/llm-gateway/go
 
-go 1.27
+go 1.24
