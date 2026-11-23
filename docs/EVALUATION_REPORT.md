@@ -3,14 +3,19 @@
 > Reproduce with `python -m llm_gateway report` and `benchmarks/benchmark.py`. The adversarial suite
 > and the offline provider are deterministic.
 
-## Setup
+## Setup & Scope
 
-- **Adversarial suite:** 14 prompts, each labeled as an injection attempt and as carrying PII.
-  Injection strings are generic, well-known patterns; PII prompts carry emails, phone numbers, a
-  social security number, a credit card, and an IP address; benign prompts are ordinary requests.
+- **Regression fixture (`src/llm_gateway/data.py` + `go/gateway/testdata/parity.json`):** 14
+  end-to-end pipeline regression prompts plus a 28-case Python-to-Go parity fixture verifying exact
+  cross-language agreement on NFKC/whitespace/zero-width-normalized injection rules and
+  Luhn-validated structured PII redaction (`CREDIT_CARD`, `SSN`, `EMAIL`, `PHONE`, `IP`, `DOB`,
+  `PASSPORT`, `API_KEY`). This fixture is a deterministic rule regression check, not an open-world
+  ML benchmark (for 91k-prompt ML injection evaluation, see `prompt-injection-detector`, which
+  plugs into `Gateway(injection_classifier=...)`). Free-form person names require NER and are out
+  of scope for the zero-dependency regex stage.
 - **Provider:** the offline provider, so results are reproducible with no credentials.
-- **Metrics:** injection precision and recall, PII-redaction recall, and the semantic cache hit rate
-  on repeated prompts.
+- **Metrics:** rule precision and recall on the regression fixture, structured PII redaction
+  recall, and polarity/entity-guarded lexical cache hit rate on repeated prompts.
 - **Hardware / cost:** CPU only; a report runs in a few milliseconds. No external services.
 
 ## Results

@@ -1,7 +1,7 @@
 <h1 align="center">LLM Gateway</h1>
 
 <p align="center">
-  <em>A safety proxy that sits in front of a language-model API: prompt-injection defense, PII redaction, output-policy enforcement, and a semantic response cache. It ships with an adversarial test suite, so its defenses are measured.</em>
+  <em>A wire-speed reliability and safety reverse proxy in front of language-model APIs (Go RE2 edge proxy + Python control plane): retry/failover, per-tenant token-bucket isolation, NFKC-normalized heuristic injection screening (with pluggable ML scorer hook), Luhn-validated structured PII redaction, and polarity-guarded lexical response caching.</em>
 </p>
 
 <p align="center">
@@ -44,15 +44,21 @@ defenses on a labeled adversarial suite, and every route records latency and err
 
 ### Components
 
-- **Prompt-injection detection**: zero-dependency weighted pattern rules by default (shared
-  identically with the Go RE2 reverse proxy), plus an optional pluggable `injection_classifier`
-  hook on `Gateway` for attaching a trained ML scorer such as
+- **Prompt-injection screening**: zero-dependency NFKC/zero-width/whitespace-normalized weighted
+  pattern rules by default (shared identically with the Go RE2 reverse proxy so obfuscations like
+  `IGNORE   ALL\tPREVIOUS  INSTRUCTIONS` or zero-width splits cannot slip past), plus an optional
+  pluggable `injection_classifier` hook on `Gateway` for attaching a trained ML scorer such as
   [`prompt-injection-detector`](https://github.com/adeoluo/prompt-injection-detector).
-- **PII redaction**: lightweight regex detection and typed-placeholder replacement for emails,
-  phone numbers, social security numbers, credit cards, and IP addresses (shared with the Go
-  proxy).
+- **Structured PII & secret redaction**: wire-speed regex + checksum redaction for Luhn-validated
+  credit cards (preventing 13-19 digit order or tracking IDs from false-positive redaction), valid
+  SSNs, emails, phone numbers, IPv4 addresses, dates of birth (`DOB`), passport IDs, and API keys
+  (`sk-*`, `AKIA*`, `ghp_*`), shared identically with the Go proxy. Free-form person names require
+  NER and are intentionally out of scope for the zero-dependency wire stage.
 - **Output-policy enforcement**: a configurable deny list and a length cap on model responses.
-- **A semantic cache**: returns a stored response for a token-similar prompt, saving model calls.
+- **Polarity- and entity-guarded lexical cache (`SemanticCache`)**: zero-dependency near-exact
+  response cache that requires matching negation polarity, matching numeric literals, and `>= 0.85`
+  Jaccard overlap on non-stopword content tokens (so `"is aspirin safe"` never collides with
+  `"is aspirin not safe"` or `"is ibuprofen safe"`).
 - **Retry + failover**: the model backend is wrapped by a `ResilientProvider` that retries
   transient failures with exponential backoff and fails over across an ordered list of providers,
   so a primary outage is served by a healthy fallback.

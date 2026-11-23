@@ -11,10 +11,14 @@ score; a request is blocked when the score crosses a threshold.
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
 
 InjectionScorer = Callable[[str], float]
+
+_ZERO_WIDTH_RE = re.compile(r"[\u200b-\u200f\u2060\ufeff\u00ad\U000e0000-\U000e007f]+")
+_WS_RE = re.compile(r"\s+")
 
 _PATTERNS: tuple[tuple[re.Pattern[str], float, str], ...] = (
     (
@@ -47,8 +51,21 @@ _PATTERNS: tuple[tuple[re.Pattern[str], float, str], ...] = (
         0.7,
         "remove_guardrails",
     ),
-    (re.compile(r"(?i)\bBEGIN SYSTEM\b|\bEND SYSTEM\b|\[/?INST\]"), 0.6, "delimiter_injection"),
+    (
+        re.compile(
+            r"(?i)\bBEGIN SYSTEM\b|\bEND SYSTEM\b|\[/?INST\]|<\|im_start\|>\s*system|<IMPORTANT>"
+        ),
+        0.6,
+        "delimiter_injection",
+    ),
 )
+
+
+def _normalize_text(text: str) -> str:
+    """Fold compatibility characters, strip zero-width/tag chars, and collapse whitespace."""
+    folded = unicodedata.normalize("NFKC", text)
+    stripped = _ZERO_WIDTH_RE.sub("", folded)
+    return _WS_RE.sub(" ", stripped).strip()
 
 
 @dataclass(frozen=True)
@@ -73,10 +90,11 @@ def assess_injection(
     adding ``"ml_classifier"`` to ``triggers`` when the model crosses ``threshold``.
     """
 
+    normalized = _normalize_text(text)
     score = 0.0
     triggers: list[str] = []
     for pattern, weight, name in _PATTERNS:
-        if pattern.search(text):
+        if pattern.search(normalized):
             score += weight
             triggers.append(name)
     if classifier is not None:

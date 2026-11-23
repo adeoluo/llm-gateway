@@ -11,6 +11,8 @@ package gateway
 import (
 	"math"
 	"regexp"
+	"strings"
+	"unicode"
 )
 
 type rule struct {
@@ -18,6 +20,8 @@ type rule struct {
 	weight  float64
 	name    string
 }
+
+var wsRe = regexp.MustCompile(`\s+`)
 
 var injectionRules = []rule{
 	{regexp.MustCompile(`(?i)ignore (all |the )?(previous|prior|above) (instructions|prompts?)`), 1.0, "instruction_override"},
@@ -29,7 +33,26 @@ var injectionRules = []rule{
 	{regexp.MustCompile(`(?i)\bdeveloper mode\b`), 0.6, "developer_mode"},
 	{regexp.MustCompile(`(?i)do anything now\b`), 0.8, "dan"},
 	{regexp.MustCompile(`(?i)without any (restrictions|filters|rules|guidelines)`), 0.7, "remove_guardrails"},
-	{regexp.MustCompile(`(?i)\bBEGIN SYSTEM\b|\bEND SYSTEM\b|\[/?INST\]`), 0.6, "delimiter_injection"},
+	{regexp.MustCompile(`(?i)\bBEGIN SYSTEM\b|\bEND SYSTEM\b|\[/?INST\]|<\|im_start\|>\s*system|<IMPORTANT>`), 0.6, "delimiter_injection"},
+}
+
+func normalizeText(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if (r >= 0x200B && r <= 0x200F) || r == 0x2060 || r == 0xFEFF || r == 0x00AD || (r >= 0xE0000 && r <= 0xE007F) {
+			continue
+		}
+		if r >= 0xFF01 && r <= 0xFF5E {
+			r -= 0xFEE0
+		}
+		if unicode.IsSpace(r) {
+			b.WriteByte(' ')
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return strings.TrimSpace(wsRe.ReplaceAllString(b.String(), " "))
 }
 
 // DefaultThreshold is the score at or above which a request is blocked.
@@ -44,10 +67,11 @@ type Injection struct {
 
 // AssessInjection scores text against every rule; it is blocked at or above threshold.
 func AssessInjection(text string, threshold float64) Injection {
+	norm := normalizeText(text)
 	score := 0.0
 	triggers := []string{}
 	for _, r := range injectionRules {
-		if r.pattern.MatchString(text) {
+		if r.pattern.MatchString(norm) {
 			score += r.weight
 			triggers = append(triggers, r.name)
 		}
@@ -60,13 +84,62 @@ type piiRule struct {
 	pattern *regexp.Regexp
 }
 
-// Applied in order, each on the output of the previous one, as in the Python version.
+var cardRe = regexp.MustCompile(`\b(?:\d[ -]?){12,18}\d\b`)
+
+// Applied in order after Luhn-validated credit card redaction, matching Python pii.py.
 var piiRules = []piiRule{
 	{"EMAIL", regexp.MustCompile(`[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`)},
 	{"SSN", regexp.MustCompile(`\b\d{3}-\d{2}-\d{4}\b`)},
-	{"CREDIT_CARD", regexp.MustCompile(`\b(?:\d[ -]?){13,16}\b`)},
-	{"PHONE", regexp.MustCompile(`\b(?:\+?1[ -]?)?\(?\d{3}\)?[ -]?\d{3}[ -]?\d{4}\b`)},
-	{"IP", regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)},
+	{"PHONE", regexp.MustCompile(`\b(?:\+?1[ -]?)?\(?\d{3}\)?[ -]?\d{3}[ -]\d{4}\b`)},
+	{"IP", regexp.MustCompile(`\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b`)},
+	{"DOB", regexp.MustCompile(`(?i)\b(?:dob|date of birth|born on)[:\s]+\d{1,4}[-/]\d{1,2}[-/]\d{2,4}\b`)},
+	{"PASSPORT", regexp.MustCompile(`(?i)\bpassport(?:\s*(?:no|number|#))?[:\s]+[A-Z0-9]{6,9}\b`)},
+	{"API_KEY", regexp.MustCompile(`\b(?:sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{30,})\b`)},
+}
+
+func luhnValid(s string) bool {
+	digits := make([]int, 0, 19)
+	for i := 0; i < len(s); i++ {
+		if s[i] >= '0' && s[i] <= '9' {
+			digits = append(digits, int(s[i]-'0'))
+		}
+	}
+	if len(digits) < 13 || len(digits) > 19 {
+		return false
+	}
+	same := true
+	for _, d := range digits[1:] {
+		if d != digits[0] {
+			same = false
+			break
+		}
+	}
+	if same {
+		return false
+	}
+	total := 0
+	for i := 0; i < len(digits); i++ {
+		d := digits[len(digits)-1-i]
+		if i%2 == 1 {
+			d *= 2
+			if d > 9 {
+				d -= 9
+			}
+		}
+		total += d
+	}
+	return total%10 == 0
+}
+
+func validSSN(s string) bool {
+	if len(s) != 11 || s[3] != '-' || s[6] != '-' {
+		return false
+	}
+	area, group, serial := s[0:3], s[4:6], s[7:11]
+	if area == "000" || area == "666" || area[0] == '9' {
+		return false
+	}
+	return group != "00" && serial != "0000"
 }
 
 // Redaction is redacted text plus the number of replacements per PII type.
@@ -75,10 +148,27 @@ type Redaction struct {
 	Counts map[string]int `json:"counts"`
 }
 
-// Redact replaces PII with typed placeholders such as [EMAIL].
+// Redact replaces structured PII with typed placeholders such as [EMAIL].
 func Redact(text string) Redaction {
 	counts := map[string]int{}
+	text = cardRe.ReplaceAllStringFunc(text, func(m string) string {
+		if luhnValid(m) {
+			counts["CREDIT_CARD"]++
+			return "[CREDIT_CARD]"
+		}
+		return m
+	})
 	for _, r := range piiRules {
+		if r.label == "SSN" {
+			text = r.pattern.ReplaceAllStringFunc(text, func(m string) string {
+				if validSSN(m) {
+					counts["SSN"]++
+					return "[SSN]"
+				}
+				return m
+			})
+			continue
+		}
 		if n := len(r.pattern.FindAllStringIndex(text, -1)); n > 0 {
 			counts[r.label] += n
 			text = r.pattern.ReplaceAllLiteralString(text, "["+r.label+"]")
