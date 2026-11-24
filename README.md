@@ -1,7 +1,7 @@
 <h1 align="center">LLM Gateway</h1>
 
 <p align="center">
-  <em>A wire-speed reliability and safety reverse proxy in front of language-model APIs (Go RE2 edge proxy + Python control plane): retry/failover, per-tenant token-bucket isolation, NFKC-normalized heuristic injection screening (with pluggable ML scorer hook), Luhn-validated structured PII redaction, and polarity-guarded lexical response caching.</em>
+  <em>A Python library and a matching Go proxy that sit in front of large language model (LLM) services to retry failed calls, screen prompts for attacks, and hide personal data.</em>
 </p>
 
 <p align="center">
@@ -14,37 +14,76 @@
 
 ---
 
-> **Evidence level: unit tested.** The Python and Go implementations agree on a parity fixture, and reliability is tested with deterministic fake providers. The screening rules are a heuristic, not a measured defense. Not independently reproduced and not used in production. [What the levels mean](https://github.com/adeoluo#evidence-levels).
+> **Evidence level: unit tested.** The Python and Go versions give the same results on a shared test file (a parity fixture). Reliability is tested with fake providers that fail in a fixed, repeatable way. The screening rules are a rule of thumb (a heuristic), not a measured defense. No one else has reproduced the results, and the gateway is not used in production. [What the levels mean](https://github.com/adeoluo#evidence-levels).
 
 ## Highlights
 
-A gateway sits between your app and the companies that provide AI models. It keeps your app
-working when a provider fails, stops one customer from using up everyone's share, and reuses
-earlier answers.
+A gateway is a program that sits between an application and the companies that provide AI
+models. This one keeps the application working when a provider fails, stops one customer from
+using up everyone's share of requests, and reuses earlier answers.
 
-- **It recovers from failures.** 2,000 of 2,000 requests succeeded when the main provider
-  failed twice on each one, and 2,000 of 2,000 when the main provider was down and a backup
-  took over.
+- **It recovers from provider failures.** All 2,000 of 2,000 requests succeeded when the main
+  provider failed twice on each one. All 2,000 of 2,000 also succeeded when the main provider
+  was down and a backup provider took over.
+- **Each customer gets its own cache and its own request limit.** Four customers each sent the
+  same 1,000 requests, and each reached a cache hit rate of 0.995 on its own (the share of
+  requests answered from saved answers; higher is better). A test checks that no customer
+  receives an answer saved for another.
 - **It is built twice, and both builds agree.** A Python version and a Go version give the
   same results on a shared test file.
 
 **Where it falls short:** the providers in those tests are fakes that fail on purpose. The
 attack screening is a short list of patterns, and a reworded attack gets past it, so it is
-not a security defense by itself. For measured detection see
-[prompt-injection-detector](https://github.com/adeoluo/prompt-injection-detector).
+not a security defense by itself. For a measured detector, see
+[prompt-injection-detector](https://github.com/adeoluo/prompt-injection-detector), a separate
+project that uses a trained model.
+
+## Key terms
+
+Plain definitions of the terms used in this README.
+
+| Term | Meaning |
+|---|---|
+| Adversarial suite | The 14 labeled test prompts in this repository. 7 are injection attacks, 5 contain personal data (one prompt is both), and 3 are ordinary requests. |
+| Cache hit rate | The share of requests answered from saved answers, without calling the model. It runs from 0 to 1; higher means fewer paid model calls. |
+| Exponential backoff | Waiting longer after each failed try before trying again. Here the wait starts at 0.05 seconds, doubles each time, and is capped at 1 second. |
+| Failover | Sending a request to the next provider in an ordered list after the current provider has failed every allowed try. |
+| Fake provider | A stand-in for a real model service. It gives fixed, repeatable answers, or fails on purpose, so tests run without a network or an account. |
+| Gateway | A program between an application and a model provider. Every request and reply passes through it, so checks and limits apply in one place. |
+| Jaccard overlap | The number of words two prompts share, divided by the number of distinct words in both. It runs from 0 to 1; the cache needs at least 0.85. |
+| Large language model (LLM) | An AI model, trained on large amounts of text, that reads a prompt and writes a reply. |
+| Luhn check | A checksum test that real credit card numbers pass. Only 13 to 19 digit numbers that pass it are hidden, so most order numbers stay readable. |
+| NFKC normalization | A standard Unicode rule that turns look-alike characters, such as full-width letters, into their plain forms. This lets the rules match disguised words. |
+| p50 latency | The median time to answer one request: half of the requests are faster. Lower is better. |
+| Parity fixture | A shared test file, generated by the Python version, that the Go version must match exactly: the same scores, block decisions, matched rules, and redactions. |
+| Personally identifiable information (PII) | Data that can identify a person, such as an email address, a phone number, or a card number. |
+| Precision | Of the prompts blocked as attacks, the share that really were attacks. It runs from 0 to 1; higher means fewer false alarms. |
+| Prompt injection | Text that tries to make a model ignore its instructions, for example "ignore all previous instructions", or reveal its hidden instructions (the system prompt). |
+| Provider | A company or service that runs a model and answers requests. The gateway talks to it through one small interface, so providers can be swapped. |
+| Recall | Of the items that should be caught, the share that was caught: attacks blocked, or prompts with personal data flagged. It runs from 0 to 1; higher is better. |
+| Recovery rate | The share of requests that finally succeeded after retries and failover. It runs from 0 to 1; higher is better. |
+| Redaction | Replacing personal data with a typed placeholder, such as `[EMAIL]`, before the text is sent on or returned. |
+| Reverse proxy | A server that receives requests meant for another server, checks or changes them, and then forwards them. |
+| Semantic cache | The gateway's store of earlier answers, reused for a new prompt with nearly the same words. Despite the name, it compares words, not meaning. |
+| Tenant | One customer or team that shares the gateway with others. Each tenant has its own cache, request limit, and counters. |
+| Threshold | The injection score at or above which a prompt is blocked. The default is 0.8. A lower threshold blocks more attacks and more harmless prompts. |
+| Throughput | The number of requests handled per second. Higher is better. |
+| Token bucket | A way to limit request rates. Each tenant's bucket refills with tokens at a fixed rate, each request spends one, and requests are refused when it is empty. |
 
 ## Motivation
 
-Putting a language model in production means putting a boundary in front of it. Untrusted input can
-try to override the system's instructions (prompt injection), carry personal data that should not
-be sent to a third party, or elicit a response that violates policy; and repeated prompts waste
-money and latency on identical calls. A **gateway** handles all of this in one place. This project
-implements that gateway from scratch and ships an **adversarial suite** so the defenses are
-reported as numbers.
+Running a language model in production means putting a checkpoint in front of it. Untrusted
+input can try to override the system's instructions. This attack is called prompt injection.
+Input can also carry personal data that should not be sent to an outside company, or ask for a
+reply that breaks policy. Repeated prompts also waste money and time on identical model calls.
+A **gateway** handles all of these problems in one place. This project builds that gateway from
+scratch. It also includes an **adversarial suite**, a labeled set of test prompts, so the
+defenses are reported as numbers.
 
-The model sits behind a small provider interface. An offline provider powers tests and continuous
-integration, so everything is reproducible without credentials; a **real Claude provider** powers
-production.
+The model sits behind a small provider interface. Tests and continuous integration (CI, the
+automatic checks that run on every change) use an offline fake provider, so every result can be
+reproduced without an account or an API key. A **real Claude provider** is included for real
+use. The tests never call it.
 
 ## Architecture
 
@@ -52,60 +91,84 @@ production.
   <img src="docs/architecture/architecture.svg" alt="Architecture diagram" width="860">
 </p>
 
-<sub>Legend: amber = entry points and external systems, indigo = core logic, green = data and state, blue = validation and control, grey = observability and outputs.</sub>
+<sub>Legend: amber marks entry points and outside systems, indigo marks core logic, green marks data and state, blue marks checks and control, grey marks monitoring and outputs.</sub>
 
-Every request, from the CLI or a validated `/complete` call, flows through fixed stages:
-injection check, input PII redaction, semantic cache lookup, model call on a miss, output-policy
-check, output PII redaction, and cache store. A blocked stage returns early with its reasons. The
-gateway records cost, blocks, and cache hits so savings are measurable, the report scores the
-defenses on a labeled adversarial suite, and every route records latency and errors for
-`/metrics`. See the [ADRs](docs/adr/) for the key decisions.
+Every request from the `complete` command or from a valid `/complete` call goes through the same
+fixed stages. First come the injection check, removal of personal data from the input, cache
+lookup, and a model call if the cache has no answer. Then come the output policy check, removal
+of personal data from the output, and saving the answer in the cache. If a stage blocks the request, the gateway
+stops there and returns the reasons. The gateway counts model calls (its measure of cost),
+blocks, and cache hits, so savings can be measured. The report scores the defenses on the
+labeled adversarial suite. Every HTTP route except `/ready` and `/metrics` records its response
+time and errors for `/metrics`. The [ADRs](docs/adr/) (architecture decision records, short notes
+that explain each key design choice) describe the main decisions.
 
 ### Components
 
-- **Prompt-injection screening**: zero-dependency NFKC/zero-width/whitespace-normalized weighted
-  pattern rules by default (shared identically with the Go RE2 reverse proxy so obfuscations like
-  `IGNORE   ALL\tPREVIOUS  INSTRUCTIONS` or zero-width splits cannot slip past), plus an optional
-  pluggable `injection_classifier` hook on `Gateway` for attaching a trained ML scorer such as
-  [`prompt-injection-detector`](https://github.com/adeoluo/prompt-injection-detector).
-- **Structured PII & secret redaction**: wire-speed regex + checksum redaction for Luhn-validated
-  credit cards (preventing 13-19 digit order or tracking IDs from false-positive redaction), valid
-  SSNs, emails, phone numbers, IPv4 addresses, dates of birth (`DOB`), passport IDs, and API keys
-  (`sk-*`, `AKIA*`, `ghp_*`), shared identically with the Go proxy. Free-form person names require
-  NER and are intentionally out of scope for the zero-dependency wire stage.
-- **Output-policy enforcement**: a configurable deny list and a length cap on model responses.
-- **Polarity- and entity-guarded lexical cache (`SemanticCache`)**: zero-dependency near-exact
-  response cache that requires matching negation polarity, matching numeric literals, and `>= 0.85`
-  Jaccard overlap on non-stopword content tokens (so `"is aspirin safe"` never collides with
-  `"is aspirin not safe"` or `"is ibuprofen safe"`).
-- **Retry + failover**: the model backend is wrapped by a `ResilientProvider` that retries
-  transient failures with exponential backoff and fails over across an ordered list of providers,
-  so a primary outage is served by a healthy fallback.
-- **Per-tenant isolation**: a `MultiTenantGateway` gives every tenant its own semantic cache,
-  token-bucket quota, and metrics, so one tenant can neither read another's cache nor exhaust its
-  quota. The handler is lock-guarded and thread-safe.
+- **Prompt-injection screening**: by default, a set of weighted pattern rules with no outside
+  dependencies. Before matching, the Python version cleans the text. It applies NFKC
+  normalization (which turns look-alike characters into plain ones), removes invisible
+  zero-width characters, and collapses runs of spaces and tabs. So tricks such as
+  `IGNORE   ALL\tPREVIOUS  INSTRUCTIONS` or a word split by a zero-width character are still
+  caught. The Go reverse proxy uses the same rules and weights with Go's RE2 pattern engine. It
+  removes the same invisible characters and collapses spaces, but from NFKC it applies only the
+  conversion of full-width letters. An optional `injection_classifier` hook on `Gateway` can add
+  a trained machine-learning (ML) scorer such as
+  [`prompt-injection-detector`](https://github.com/adeoluo/prompt-injection-detector). The final
+  score is then the higher of the two scores.
+- **Structured PII and secret redaction**: pattern rules and checksum tests that replace
+  personal data and secrets with placeholders. They cover credit card numbers that pass the Luhn
+  check, which keeps most 13-19 digit order or tracking numbers from being hidden by mistake.
+  They also cover US Social Security numbers (SSNs) in valid number ranges, email addresses,
+  North American phone numbers, IPv4 addresses, and API keys (`sk-*`, `AKIA*`, `ghp_*`). Dates
+  of birth and passport numbers are covered when they follow a label such as `DOB` or
+  "passport". The Go proxy uses the same patterns. Free-form person names would need
+  named-entity recognition (NER, a trained model that finds names in text), so this
+  dependency-free stage leaves them out on purpose.
+- **Output-policy enforcement**: a deny list and a length limit on model replies. The deny list
+  is set in the code and holds only placeholder words.
+- **Lexical cache with polarity and entity guards (`SemanticCache`)**: a dependency-free cache
+  that reuses an answer only for a nearly identical prompt. "Lexical" means that it compares
+  words, not meaning. Two prompts match only if they have the same negation words (such as
+  "not") and the same numbers. Their content words, the words left after common words such as
+  "the" are removed, must also have a Jaccard overlap of at least 0.85. So `"is aspirin safe"` never matches
+  `"is aspirin not safe"` or `"is ibuprofen safe"`.
+- **Retry and failover**: a `ResilientProvider` wraps the model backend. When a provider fails
+  with a temporary error, it tries again, with exponential backoff between tries. When one
+  provider has used up its tries, it moves on to the next provider in an ordered list. So a
+  working backup handles an outage of the main provider.
+- **Per-tenant isolation**: a `MultiTenantGateway` gives every tenant its own cache, its own
+  token-bucket request limit, and its own counters. So one tenant can neither read another
+  tenant's cached answers nor use up another tenant's limit. A lock guards the request handler,
+  so many threads can call it at the same time safely.
 
 ## Results
 
 ### Reliability and multi-tenancy (`benchmarks/reliability.py`)
 
-The gateway wraps the model backend in reliability machinery and keeps tenants isolated, all
-proven offline with deterministic fake providers (a `FlakyProvider` that fails a fixed number
-of times then succeeds, and a `FailingProvider` that is always down). Reproduce with
-`uv run python benchmarks/reliability.py`.
+The gateway wraps the model backend in retry and failover logic and keeps tenants apart. All of
+this is tested offline with fake providers that behave the same way on every run. A
+`FlakyProvider` fails a fixed number of times and then succeeds. A `FailingProvider` is always
+down. Reproduce the results with `uv run python benchmarks/reliability.py` (uv is a Python
+project and package manager).
 
-- **Retry with backoff.** A `ResilientProvider` retries transient `ProviderError`s up to
-  `max_attempts` times with exponential backoff before giving up. Over 2,000 requests whose
-  primary fails twice each, it recovers **100%** (2,000/2,000) with 4,000 retries applied.
-- **Failover.** When a provider is exhausted, the request fails over to the next provider in an
-  ordered list. With a *dead* primary and a healthy fallback, 2,000/2,000 requests still succeed
-  (**100% recovery**, 2,000 failovers).
-- **Per-tenant quota isolation.** Each tenant has its own token bucket, so one tenant draining
-  its quota returns `rate_limited` to that tenant only; others are unaffected.
-- **Per-tenant cache isolation.** Each tenant has its own semantic cache. Four tenants replaying
-  the same 1,000-request stream each reach a **0.995 cache hit rate** independently (5 model calls
-  per tenant), and a tenant never reads another's cached response, proven with a counting
-  provider whose answer changes per call.
+- **Retry with backoff.** A `ResilientProvider` tries a provider up to `max_attempts` times when
+  it raises a temporary error (`ProviderError`), and waits longer after each failure. In 2,000
+  requests where the main provider fails twice each time, **100%** of requests recover (2,000
+  of 2,000). This takes 4,000 retries in total.
+- **Failover.** When a provider has used up its tries, the request moves to the next provider in
+  an ordered list. With a *dead* main provider and a working backup, 2,000 of 2,000 requests
+  still succeed (**100% recovery**, 2,000 failovers).
+- **Per-tenant quota isolation.** Each tenant has its own token bucket. When one tenant uses up
+  its quota, only that tenant receives `rate_limited`. Other tenants are not affected.
+- **Per-tenant cache isolation.** Each tenant has its own cache. Four tenants each replay the
+  same 1,000-request stream, and each reaches a **0.995 cache hit rate** on its own (5 model
+  calls per tenant). A tenant never reads another tenant's cached answer. A test shows this with
+  a counting provider that returns a different answer on every call.
+
+The table below sums up these results. Each row is one reliability property, and the column
+gives its measured value. For the rates, 1.000 is the best possible value. "Lossless" means that
+no request was lost or counted twice.
 
 | Reliability property | Measured result |
 |---|---:|
@@ -114,17 +177,23 @@ of times then succeeds, and a `FailingProvider` that is always down). Reproduce 
 | per-tenant cache hit rate (4 tenants x 1,000 reqs) | 0.995 |
 | concurrent requests with consistent counters (3 tenants x 200 threaded reqs) | lossless |
 
-A concurrency test drives the `MultiTenantGateway` from three tenant threads (200 requests each)
-and asserts every request is counted exactly once and each tenant's cache is built independently,
-confirming the counters and caches are thread-safe under contention.
+A concurrency test sends requests to the `MultiTenantGateway` from three tenant threads at the
+same time, 200 requests each. It checks that every request is counted exactly once and that each
+tenant's cache is built separately. This shows that the counters and caches stay correct when
+threads compete.
 
 ### Rule smoke/regression suite (`python -m llm_gateway report`)
 
-> The bundled 14-prompt suite is a fast deterministic regression check for the built-in regex
-> screening and PII rules (shared with the Go reverse proxy), not an evaluation of open-world
-> prompt-injection recall (for full-scale 91k-prompt ML evaluation, see
+> The bundled 14-prompt suite is a quick, repeatable check (a smoke and regression test) that the
+> built-in injection and PII pattern rules still behave as before. The Go reverse proxy shares
+> these rules. The suite does not measure how many real-world prompt injections the rules catch.
+> For a full machine-learning evaluation on about 91,000 prompts, see
 > [`prompt-injection-detector`](https://github.com/adeoluo/prompt-injection-detector), which plugs
-> into `Gateway(injection_classifier=...)`).
+> into `Gateway(injection_classifier=...)`.
+
+The table shows the result of each check on the 14-prompt suite. Every value runs from 0 to 1,
+and higher is better. The cache row comes from sending the harmless prompts twice, so 0.500 is
+the best possible value there: every prompt needs the model on its first pass.
 
 | Smoke check (14-prompt regression fixture) | Value |
 |---|---:|
@@ -133,14 +202,23 @@ confirming the counters and caches are thread-safe under contention.
 | PII redaction recall | 1.000 |
 | semantic cache hit rate on repeats | 0.500 |
 
-The one missed injection in the fixture is a bare delimiter marker below the default `0.8`
-threshold.
+Injection recall is 0.857 because the rules block 6 of the 7 attacks. The missed attack is only a
+delimiter marker (`[INST]`, a tag some models use to mark instructions). It scores 0.6, below the
+default `0.8` threshold.
 
 ### Synthetic stream scaling (`benchmarks/scale.py`)
 
-To check that memory stays bounded under volume, `benchmarks/scale.py` replays synthetic request
-streams (sampled with repetition from the fixture above) through `Gateway.handle`, measuring
-in-process throughput and `tracemalloc` peak memory.
+This benchmark checks how speed and memory change as the number of requests grows.
+`benchmarks/scale.py` sends made-up (synthetic) request streams through `Gateway.handle`. Each
+stream draws prompts at random, with repeats, from the 14-prompt suite above. The benchmark
+measures throughput inside one process, and peak memory with `tracemalloc` (Python's built-in
+memory tracer).
+
+Each row below is one stream size. The columns give the run time in seconds, the throughput in
+requests per second (higher is better), and the peak memory in MiB (lower is better). They also
+give injection precision and recall, PII recall, and cache hit rate, all from 0 to 1 (higher is
+better). Peak memory stays at 0.01 MiB at every size, for this stream that repeats the same 14
+prompts.
 
 | Synthetic requests | Wall-clock (s) | Throughput (req/s) | Peak memory (MiB) | Inj. precision | Inj. recall | PII recall | Cache hit rate |
 |---:|---:|---:|---:|---:|---:|---:|---:|
@@ -153,8 +231,9 @@ Reproduce with `uv run python benchmarks/scale.py`.
 
 ### Evaluation methodology
 
-The adversarial suite and offline provider are deterministic, so every number reproduces offline.
-Full method and tables: [`docs/EVALUATION_REPORT.md`](docs/EVALUATION_REPORT.md).
+The adversarial suite and the offline provider behave the same way on every run, so every count
+and rate above can be reproduced offline. Speed and memory figures depend on the machine. The
+full method and tables are in [`docs/EVALUATION_REPORT.md`](docs/EVALUATION_REPORT.md).
 
 ## Quickstart
 
@@ -171,7 +250,9 @@ python -m llm_gateway serve                   # start the HTTP service on :8000
 
 ## Usage
 
-A real run: an injection attempt flagged and its email address redacted, a benign prompt passed, then the defense report. Regenerate with `vhs docs/demo/gateway.tape`.
+A recorded real run: an injection attempt is flagged and its email address is redacted, a
+harmless prompt passes, and then the defense report is shown. Regenerate the recording with
+`vhs docs/demo/gateway.tape` (vhs is a tool that records terminal sessions).
 
 <p align="center">
   <img src="docs/demo/gateway.gif" alt="llm-gateway flagging an injection attempt and redacting PII" width="860">
@@ -203,8 +284,8 @@ if result.status == "ok":
     send(result.text)
 ```
 
-The `AnthropicProvider` calls the Claude Messages API over HTTPS with the standard-library HTTP
-client. It is never exercised by the test suite.
+The `AnthropicProvider` calls the Claude Messages API over HTTPS with Python's built-in HTTP
+client. The test suite never calls it.
 
 #### Reliability and per-tenant isolation in code
 
@@ -231,10 +312,15 @@ elif outcome.status == "rate_limited":
 
 ### HTTP service
 
-A standard-library HTTP service wraps the gateway. The routing logic is a pure function, tested
-without a socket. Under a concurrent stress benchmark (`uv run python benchmarks/stress.py`, 10000
-requests, 8 workers) the `/complete` handler sustains roughly **8,400 requests/second** at
-**p50 0.07 ms** with the offline provider.
+A small HTTP service, built only on Python's standard library, wraps the gateway. The routing
+logic is a plain function, so tests call it directly without opening a network connection. A
+concurrent stress benchmark (`uv run python benchmarks/stress.py`) calls the `/complete` handler
+10,000 times from 8 parallel workers, in the same process and with the offline provider. The
+handler sustains about **8,400 requests per second**, with a median (p50) latency of
+**0.07 ms**.
+
+The service offers the routes below. Each row is one route: its HTTP method, its path, and what
+it does. `/metrics` uses the Prometheus text format (a format that common monitoring tools read).
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -248,11 +334,14 @@ requests, 8 workers) the `/complete` handler sustains roughly **8,400 requests/s
 
 ### Go proxy
 
-`go/` contains `gateway-proxy`, a single static binary that puts the same rules in front of
-any OpenAI-compatible API. It authenticates client keys, rate limits each key with a token
-bucket, refuses requests whose user messages score at or above the injection threshold
-(HTTP 422 with the triggers), redacts PII from every message before forwarding and from the
-response before returning it, and sends upstream only its own key, never the client's.
+`go/` contains `gateway-proxy`, a single self-contained program that applies the same rules in
+front of any OpenAI-compatible API (any service that accepts the same requests as OpenAI's API).
+It checks client keys: when `GATEWAY_CLIENT_KEYS` is set, it accepts only those keys. It limits
+the request rate of each key with a token bucket. It refuses a request when its user messages
+score at or above the injection threshold, and returns HTTP 422 with the matched rules. It
+redacts PII from every message before forwarding the request. It also redacts PII from the reply
+text of a successful response before returning it. It sends only its own key to the upstream
+service, never the client's key.
 
 ```bash
 cd go && go build -o bin/gateway-proxy ./cmd/gateway-proxy
@@ -263,22 +352,24 @@ curl -s localhost:8090/v1/chat/completions -H "Authorization: Bearer team-a" \
 # {"error":{"message":"refused by gateway","score":1,"triggers":["instruction_override"],"type":"blocked_injection"}}
 ```
 
-The rules are ported from the Python package, and `go/gateway/testdata/parity.json` is
-generated by it: the Go tests require the same scores, block decisions, triggers, and
-redactions on all 24 cases. Streaming requests are refused, because a response is screened
-as a whole before any of it is returned.
+The rules are ported from the Python package. The Python package generates
+`go/gateway/testdata/parity.json`, and the Go tests require the same scores, block decisions,
+triggers (names of the matched rules), and redactions on all 24 generated cases. The proxy
+refuses streaming requests, because it checks each response as a whole before it returns any
+part of it.
 
 ### Demos
 
-Recorded from real runs with [vhs](https://github.com/charmbracelet/vhs); each tape is in `docs/demo/`.
+These recordings come from real runs made with [vhs](https://github.com/charmbracelet/vhs), a
+terminal recorder. Each recording script (a tape) is in `docs/demo/`.
 
-The full safety pipeline on a request, end to end.
+The full safety pipeline handling one request, from start to finish.
 
 <p align="center">
   <img src="docs/demo/complete.gif" alt="The full safety pipeline on a request, end to end" width="860">
 </p>
 
-The HTTP service inspecting a prompt, then the running counters.
+The HTTP service checking a prompt, then showing its running counters.
 
 <p align="center">
   <img src="docs/demo/http.gif" alt="The HTTP service inspecting a prompt, then the running counters" width="860">
@@ -286,10 +377,11 @@ The HTTP service inspecting a prompt, then the running counters.
 
 ## Design decisions
 
-- **A single pipeline in front of the model**: centralizing injection, redaction, policy, and
-  caching makes the safety boundary one auditable place. See [ADR 0002](docs/adr/0002-gateway-pipeline.md).
-- **Layered, weighted injection rules**: no single rule is reliable, so risk is a weighted sum with
-  a tunable threshold, trading precision against recall explicitly. See
+- **A single pipeline in front of the model**: injection checks, redaction, policy, and caching
+  all sit in one pipeline, so the safety boundary is one place to audit. See [ADR 0002](docs/adr/0002-gateway-pipeline.md).
+- **Layered, weighted injection rules**: no single rule is reliable. So the risk score is a
+  weighted sum of the matched rules, compared with an adjustable threshold. This makes the trade
+  between precision and recall explicit. See
   [ADR 0003](docs/adr/0003-layered-injection.md).
 
 ## Testing
@@ -300,16 +392,20 @@ make coverage    # pytest with an 80% coverage gate, as in CI
 make lint type   # ruff format check, ruff lint, mypy
 ```
 
-- `tests/test_gateway.py`: injection blocking and benign pass-through, PII redaction across formats, output-policy enforcement, the semantic cache, each gateway pipeline stage, and the adversarial-suite evaluation.
-- `tests/test_resilience_tenancy.py`: retry and failover with deterministic flaky and failing providers, token-bucket refill, per-tenant quota and cache isolation, Prometheus metrics rendering, and a threaded concurrency test that checks counters and caches stay consistent.
-- `go/gateway/gateway_test.go`: parity with the Python rules on 24 generated cases,
-  per-key token buckets, redaction in both directions, injection blocked before any
-  upstream call, the client key never forwarded, input limits, upstream failure, and
-  metrics (`go test -race`, 95% statement coverage).
+- `tests/test_gateway.py`: blocking of injections and pass-through of harmless prompts, PII redaction across formats, output-policy checks, the cache, each gateway pipeline stage, and the adversarial-suite evaluation.
+- `tests/test_resilience_tenancy.py`: retry and failover with fake providers that fail in fixed ways, token-bucket refill, per-tenant quota and cache isolation, rendering of Prometheus metrics, and a test with several threads that checks that counters and caches stay consistent.
+- `go/gateway/gateway_test.go`: agreement with the Python rules on 24 generated cases,
+  per-key token buckets, redaction in both directions, injection blocked before any call to
+  the upstream service, the client key never forwarded, input limits, upstream failure, and
+  metrics. The tests run with `go test -race`, which also detects unsafe shared memory access
+  between threads.
 - `tests/test_service_cli.py`: the HTTP handler layer (health, readiness, `/complete`, `/inspect`, `/report`, `/stats`, validation, metrics, unknown routes) and the command-line interface.
 
-All tests use offline providers; the Anthropic provider is never called. CI runs ruff format, ruff lint, mypy, and pytest with the coverage gate on Python 3.12, 3.13, 3.14 and 3.15, then builds the package and the Docker image. A Go job runs `gofmt`, `go vet`, and
-`go test -race`.
+All tests use offline providers, and the Anthropic provider is never called. CI runs ruff format
+and ruff lint (a Python formatter and code checker), mypy (a type checker), and pytest (the test
+runner) on Python 3.12, 3.13, 3.14 and 3.15. The pytest step fails if the tests run less than 80%
+of the code. CI then builds the package and the Docker image. A separate Go job runs `gofmt`
+(format check), `go vet` (static checks), and `go test -race`.
 
 ## Responsible AI
 
@@ -317,27 +413,29 @@ All tests use offline providers; the Anthropic provider is never called. CI runs
 - **Data card:** [`docs/DATA_CARD.md`](docs/DATA_CARD.md)
 - **Threat model:** [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md)
 - **Standards:** the [threat model](docs/THREAT_MODEL.md#standards-mapping) maps each control
-  to the OWASP Top 10 for LLM Applications 2026 (LLM01:2026 Prompt Injection, LLM02:2026
-  Sensitive Information Disclosure, LLM06:2026 Unbounded Consumption, LLM08:2026 Hidden
-  Context Exposure, LLM10:2026 Improper Output Handling) and to MITRE ATLAS v2026.10 (for
-  example AML.T0051.000 LLM Prompt Injection: Direct and AML.T0054 LLM Jailbreak).
+  to two public catalogs. The first is the OWASP Top 10 for LLM Applications 2026, a list of the
+  main security risks for LLM applications. It covers LLM01:2026 Prompt Injection, LLM02:2026
+  Sensitive Information Disclosure, LLM06:2026 Unbounded Consumption, LLM08:2026 Hidden Context
+  Exposure, and LLM10:2026 Improper Output Handling. The second is MITRE ATLAS v2026.10, a
+  catalog of attack techniques against AI systems. Examples are AML.T0051.000 LLM Prompt
+  Injection: Direct and AML.T0054 LLM Jailbreak.
 
 ## Limitations
 
-- Injection detection is rule-based and cannot catch every novel attack; it is a strong, measurable
-  first layer, not a guarantee. The threshold trades precision against recall.
-- PII detection is regex-based for common formats; unusual formats or names are not covered.
-- The semantic cache uses token-overlap similarity, not embeddings, so paraphrases with few shared
-  words are treated as distinct.
+- Injection detection uses rules and cannot catch every new attack. It is a measurable first
+  layer, not a guarantee. The threshold trades precision against recall.
+- PII detection uses patterns for common formats. Unusual formats and names are not covered.
+- The cache compares shared words. It does not use embeddings (lists of numbers that capture
+  meaning). So two prompts with the same meaning but few shared words are treated as different.
 
 ## Roadmap
 
-- [ ] Add an embedding-based semantic cache for paraphrase matching.
-- [x] Add per-tenant rate limiting and budget caps.
-- [x] Add retry with backoff and cross-provider failover for the model backend.
+- [ ] Add a cache based on embeddings, so prompts with the same meaning but different words can match.
+- [x] Add per-tenant rate limiting with token-bucket quotas.
+- [x] Add retry with backoff and failover across providers for the model backend.
 - [x] A Go reverse proxy with the same rules for OpenAI-compatible APIs.
-- [ ] Stream responses through the Go proxy with incremental redaction.
-- [ ] Add a canary-token check for system-prompt leakage in responses.
+- [ ] Stream responses through the Go proxy, and redact each part as it arrives.
+- [ ] Add a canary-token check that detects leaks of the system prompt in responses. A canary token is a secret marker placed in the system prompt.
 
 ## License
 
