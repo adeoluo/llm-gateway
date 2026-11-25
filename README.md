@@ -14,7 +14,7 @@
 
 ---
 
-> **Evidence level: unit tested.** The Python and Go versions give the same results on a shared test file (a parity fixture). Reliability is tested with fake providers that fail in a fixed, repeatable way. The screening rules are a rule of thumb (a heuristic), not a measured defense. No one else has reproduced the results, and the gateway is not used in production. [What the levels mean](https://github.com/adeoluo#evidence-levels).
+> **Evidence level: unit tested.** The Python and Go versions give the same results on a shared test file (a parity fixture). Reliability is tested with fake providers that fail in a fixed, repeatable way. The screening rules are a rule of thumb (a heuristic), not a measured defense. No one else has reproduced the results, and the gateway is not used in production.
 
 ## Highlights
 
